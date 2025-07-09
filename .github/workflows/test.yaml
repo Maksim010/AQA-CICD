@@ -6,17 +6,10 @@ jobs:
   test:
     # где заускаем
     runs-on: ubuntu-latest
-    services:
-      selenium:
-        image: selenium/standalone-chrome
-        ports:
-          - 4444:4444
     # что делаем
     steps:
       # выкачиваем репозиторий
       - uses: actions/checkout@v3
-
-      - run: chmod +x gradlew
       # настраиваем java
       - uses: actions/setup-java@v3
         with:
