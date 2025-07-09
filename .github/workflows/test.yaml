@@ -10,6 +10,8 @@ jobs:
     steps:
       # выкачиваем репозиторий
       - uses: actions/checkout@v3
+
+        run: chmod +x gradlew
       # настраиваем java
       - uses: actions/setup-java@v3
         with:
