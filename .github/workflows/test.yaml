@@ -4,39 +4,65 @@ on: workflow_dispatch
 
 jobs:
   test:
-    # где заускаем
     runs-on: ubuntu-latest
-    # что делаем
+
+    services:
+      selenoid:
+        image: aerokube/selenoid:latest
+        ports:
+          - 4444:4444
+        volumes:
+          - /var/run/docker.sock:/var/run/docker.sock
+        env:
+          OVERRIDE_HOME: /home/selenoid
+
     steps:
-      # выкачиваем репозиторий
-      - uses: actions/checkout@v3
-      # настраиваем java
+      # Шаг 1: Получаем код
+      - uses: actions/checkout@v4
+
+      # Шаг 2: Даем права на выполнение gradlew
+      - name: Make gradlew executable
+        run: chmod +x gradlew
+
+      # Шаг 3: Настраиваем Java
       - uses: actions/setup-java@v3
         with:
           distribution: 'temurin'
           java-version: '17'
-      - uses: Xotabu4/selenoid-github-action@v2
-      # запускаем тесты
-      - run: ./gradlew clean test -Dselenide.remote=http://localhost:4444/wd/hub
-      # скачиваем историю тестов
-      - uses: actions/checkout@v2
+
+      # Шаг 4: Запускаем тесты с ожиданием готовности Selenoid
+      - name: Run tests
+        run: |
+          echo "Waiting for Selenoid to start..."
+          while ! nc -z localhost 4444; do
+            sleep 1
+          done
+          ./gradlew clean test -Dselenide.remote=http://localhost:4444/wd/hub
+
+      # Шаг 5: Генерируем и публикуем Allure отчет
+      - name: Prepare Allure results
         if: always()
-        continue-on-error: true
+        run: |
+          mkdir -p allure-results
+          [ -d build/allure-results ] && cp -r build/allure-results/* allure-results/
+
+      - uses: actions/upload-artifact@v3
+        if: always()
         with:
-          ref: gh-pages
-          path: gh-pages
-      # генерируем отчет
+          name: allure-results
+          path: allure-results
+
       - uses: simple-elf/allure-report-action@master
         if: always()
         with:
           gh_pages: gh-pages
-          allure_results: build/allure-results
+          allure_results: allure-results
           allure_report: allure-report
           allure_history: allure-history
-      # публикуем отчет
-      - uses: peaceiris/actions-gh-pages@v2
+
+      - uses: peaceiris/actions-gh-pages@v3
         if: always()
-        env:
-          PERSONAL_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          PUBLISH_BRANCH: gh-pages
-          PUBLISH_DIR: allure-history
+        with:
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          publish_branch: gh-pages
+          publish_dir: allure-history
