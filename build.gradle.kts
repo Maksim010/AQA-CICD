@@ -57,6 +57,8 @@ allure {
         }
     }
 }
+
+
 tasks.test {
     useJUnitPlatform()
     systemProperties = mapOf(
@@ -68,6 +70,3 @@ tasks.test {
     )
 }
 
-tasks.compileJava {
-    options.compilerArgs.add("-parameters")
-}
