@@ -6,11 +6,15 @@ jobs:
   test:
     # где заускаем
     runs-on: ubuntu-latest
+    services:
+      selenium:
+        image: selenium/standalone-chrome
+        ports:
+          - 4444:4444
     # что делаем
     steps:
       # выкачиваем репозиторий
       - uses: actions/checkout@v3
-
 
       - run: chmod +x gradlew
       # настраиваем java
@@ -20,7 +24,7 @@ jobs:
           java-version: '17'
       - uses: Xotabu4/selenoid-github-action@v2
       # запускаем тесты
-      - run: ./gradlew clean test -Dselenide.remote=http://localhost:4444/wd/hub
+      - run: ./gradlew clean test
       # скачиваем историю тестов
       - uses: actions/checkout@v2
         if: always()

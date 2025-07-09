@@ -60,7 +60,7 @@ allure {
 tasks.test {
     useJUnitPlatform()
     systemProperties = mapOf(
-        "allure.results.directory" to "${buildDir}/allure-results",
+        "allure.results.directory" to layout.buildDirectory.dir("allure-results").get().asFile.absolutePath,
         "junit.jupiter.extensions.autodetection.enabled" to "true"
     )
     jvmArgs = listOf(
