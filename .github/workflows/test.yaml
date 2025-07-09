@@ -25,7 +25,7 @@ jobs:
         run: chmod +x gradlew
 
       # Шаг 3: Настраиваем Java
-      - uses: actions/setup-java@v3
+      - uses: actions/setup-java@v4
         with:
           distribution: 'temurin'
           java-version: '17'
@@ -39,19 +39,22 @@ jobs:
           done
           ./gradlew clean test -Dselenide.remote=http://localhost:4444/wd/hub
 
-      # Шаг 5: Генерируем и публикуем Allure отчет
+      # Шаг 5: Подготовка Allure результатов (обновленная версия)
       - name: Prepare Allure results
         if: always()
         run: |
           mkdir -p allure-results
           [ -d build/allure-results ] && cp -r build/allure-results/* allure-results/
 
-      - uses: actions/upload-artifact@v3
+      # Шаг 6: Загрузка артефактов (обновленная версия v4)
+      - uses: actions/upload-artifact@v4
         if: always()
         with:
           name: allure-results
           path: allure-results
+          retention-days: 5
 
+      # Шаг 7: Генерация Allure отчета
       - uses: simple-elf/allure-report-action@master
         if: always()
         with:
@@ -60,9 +63,11 @@ jobs:
           allure_report: allure-report
           allure_history: allure-history
 
-      - uses: peaceiris/actions-gh-pages@v3
+      # Шаг 8: Публикация отчета (обновленная версия v4)
+      - uses: peaceiris/actions-gh-pages@v4
         if: always()
         with:
           github_token: ${{ secrets.GITHUB_TOKEN }}
           publish_branch: gh-pages
           publish_dir: allure-history
+          force_orphan: true
