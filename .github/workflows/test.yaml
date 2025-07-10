@@ -13,7 +13,7 @@ jobs:
           - 4444:4444
         volumes:
           - /var/run/docker.sock:/var/run/docker.sock
-          - ${{ github.workspace }}/config/browsers.json:/etc/selenoid/browsers.json:ro
+          - ${{ github.workspace }}/browsers.json:/etc/selenoid/browsers.json:ro
         env:
           OVERRIDE_HOME: /home/selenoid
         options: >-
