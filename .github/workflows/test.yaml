@@ -1,19 +1,25 @@
-name: Test
+name: Test Automation CI
 
-on: workflow_dispatch
+on:
+  workflow_dispatch:
+  push:
+    branches: [ main, master ]
+  pull_request:
 
 jobs:
   test:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04-latest  # Используем актуальную LTS версию Ubuntu
 
     services:
       selenoid:
-        image: aerokube/selenoid:latest
+        image: aerokube/selenoid:2.0
         ports:
           - 4444:4444
         volumes:
           - /var/run/docker.sock:/var/run/docker.sock
           - ./browsers.json:/etc/selenoid/browsers.json:ro
+        env:
+          OVERRIDE_HOME: /home/selenoid
         options: >-
           --health-cmd "curl -f http://localhost:4444/status || exit 1"
           --health-interval 5s
@@ -21,17 +27,19 @@ jobs:
           --health-retries 5
 
     steps:
-      - uses: actions/checkout@v4
+      - name: Checkout code
+        uses: actions/checkout@v4
 
-      - run: chmod +x gradlew
-
-      - uses: actions/setup-java@v4
+      - name: Setup Java 17
+        uses: actions/setup-java@v4
         with:
           distribution: 'temurin'
           java-version: '17'
+          cache: 'gradle'
 
-      - name: Prepare Selenoid config
+      - name: Setup Selenoid environment
         run: |
+          mkdir -p ~/.aerokube/selenoid
           echo '{
             "chrome": {
               "default": "125.0",
@@ -40,18 +48,18 @@ jobs:
                   "image": "selenoid/chrome:125.0",
                   "port": "4444",
                   "path": "/",
-                  "env": ["TZ=UTC"]
+                  "env": ["TZ=UTC"],
+                  "volumes": ["/tmp:/tmp"]
                 }
               }
             }
           }' > browsers.json
-
-      - name: Pull browser image
-        run: docker pull selenoid/chrome:125.0
+          
+          docker pull selenoid/chrome:125.0
 
       - name: Wait for Selenoid
         run: |
-          for i in {1..15}; do
+          for i in {1..10}; do
             if curl -s http://localhost:4444/status | grep -q '"total":'; then
               echo "Selenoid ready!"
               curl http://localhost:4444/status
@@ -66,21 +74,32 @@ jobs:
           ./gradlew clean test \
             -Dselenide.remote=http://localhost:4444/wd/hub \
             -Dselenide.browser=chrome \
-            -Dremote.timeout=90000 \
-            -Dwebdriver.chrome.driver=/usr/bin/chromedriver
+            -Dselenide.browserVersion=125.0 \
+            -Dremote.timeout=90000
 
-      - name: Collect logs
-        if: always()
-        run: |
-          docker logs selenoid > selenoid.log
-          docker ps -a > containers.log
-        continue-on-error: true
-
-      - uses: actions/upload-artifact@v4
+      - name: Upload test results
+        uses: actions/upload-artifact@v4
         if: always()
         with:
-          name: diagnostics
+          name: test-results
           path: |
-            selenoid.log
-            containers.log
-            build/reports/tests/test/*
+            build/reports/tests/test
+            build/allure-results
+
+      - name: Setup Allure reporting
+        uses: simple-elf/allure-report-action@master  # Используем конкретную стабильную версию
+        if: always()
+        with:
+          gh_pages: gh-pages
+          allure_results: build/allure-results
+          allure_report: allure-report
+          allure_history: allure_history
+
+      - name: Deploy report
+        uses: peaceiris/actions-gh-pages@v3
+        if: always()
+        with:
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          publish_branch: gh-pages
+          publish_dir: ./allure-report
+          force_orphan: true
