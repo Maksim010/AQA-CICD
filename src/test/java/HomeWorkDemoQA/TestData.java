@@ -7,6 +7,8 @@ import static HomeWorkDemoQA.utils.RandomUtils.generateRandomString;
 public class TestData {
     public static final String BASE_URL = "https://demoqa.com";
     public static final String BROWSER = "chrome";
+    public static final String BROWSER_SIZE = "1920x1080";
+    public static final String PAGE_LOAD_STRATEGY = "normal";
     public static final int TIMEOUT = 15000;
     public static final int PAGE_LOAD_TIMEOUT = 20000;
 

@@ -10,6 +10,8 @@ import org.junit.jupiter.api.BeforeEach;
 
 import static HomeWorkDemoQA.TestData.BASE_URL;
 import static HomeWorkDemoQA.TestData.BROWSER;
+import static HomeWorkDemoQA.TestData.BROWSER_SIZE;
+import static HomeWorkDemoQA.TestData.PAGE_LOAD_STRATEGY;
 import static HomeWorkDemoQA.TestData.PAGE_LOAD_TIMEOUT;
 import static HomeWorkDemoQA.TestData.TIMEOUT;
 import static com.codeborne.selenide.Condition.text;
@@ -24,9 +26,11 @@ public class BaseTestsDemoQA {
     private static final String PRACTICE_FORM_TEXT = "Practice Form";
 
     @BeforeAll
-    public static void setUpBeforeClass() throws Exception {
+    public static void setUpBeforeClass() {
         Configuration.baseUrl = BASE_URL;
         Configuration.browser = BROWSER;
+        Configuration.browserSize = BROWSER_SIZE;
+        Configuration.pageLoadStrategy = PAGE_LOAD_STRATEGY;
         Configuration.pageLoadTimeout = PAGE_LOAD_TIMEOUT;
         Configuration.holdBrowserOpen = true;
         Configuration.timeout = TIMEOUT;
@@ -35,7 +39,7 @@ public class BaseTestsDemoQA {
 
     @Step("Precondition для тестов на форму DemoQA ")
     @BeforeEach
-    public void setUp() throws Exception {
+    public void setUp() {
         open(OPEN_AUTOMATION_PRACTICE_FORM_RELATIVE_URL);
         PRACTICE_FORM_TEXT_SELECTOR.shouldHave(text(PRACTICE_FORM_TEXT));
         executeJavaScript("$('#fixedban').remove()");
