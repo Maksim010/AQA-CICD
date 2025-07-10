@@ -4,41 +4,64 @@ on: workflow_dispatch
 
 jobs:
   test:
-    # где заускаем
     runs-on: ubuntu-latest
-    # что делаем
+
     steps:
-      # выкачиваем репозиторий
       - uses: actions/checkout@v4
 
       - run: chmod +x gradlew
-      # настраиваем java
+
       - uses: actions/setup-java@v4
         with:
           distribution: 'temurin'
           java-version: '17'
-      - uses: Xotabu4/selenoid-github-action@v2
-      # запускаем тесты
-      - run: ./gradlew clean test -Dselenide.remote=http://localhost:4444/wd/hub
-      # скачиваем историю тестов
-      - uses: actions/checkout@v2
-        if: always()
-        continue-on-error: true
+
+      # Явно скачиваем образ браузера
+      - name: Pull browser image
+        run: docker pull selenoid/chrome:latest
+
+      # Запускаем Selenoid с явной конфигурацией
+      - name: Start Selenoid
+        run: |
+          mkdir -p ~/.aerokube/selenoid
+          echo '{
+            "chrome": {
+              "default": "latest",
+              "versions": {
+                "latest": {
+                  "image": "selenoid/chrome:latest",
+                  "port": "4444",
+                  "path": "/"
+                }
+              }
+            }
+          }' > ~/.aerokube/selenoid/browsers.json
+          
+          docker run -d --name selenoid \
+            -p 4444:4444 \
+            -v /var/run/docker.sock:/var/run/docker.sock \
+            -v ~/.aerokube/selenoid:/etc/selenoid \
+            aerokube/selenoid:latest
+
+      # Ждём готовности Selenoid
+      - name: Wait for Selenoid
+        run: |
+          for i in {1..10}; do
+            if curl -s http://localhost:4444/status | grep -q '"total":'; then
+              echo "Selenoid ready!"
+              break
+            fi
+            echo "Waiting for Selenoid (attempt $i)..."
+            sleep 3
+          done
+
+      # Запускаем тесты с debug-логами
+      - run: ./gradlew clean test -Dselenide.remote=http://localhost:4444/wd/hub -Dselenide.browser=chrome -Dremote.timeout=60000
+
+      # Сохраняем логи при ошибке
+      - uses: actions/upload-artifact@v4
+        if: failure()
         with:
-          ref: gh-pages
-          path: gh-pages
-      # генерируем отчет
-      - uses: simple-elf/allure-report-action@master
-        if: always()
-        with:
-          gh_pages: gh-pages
-          allure_results: build/allure-results
-          allure_report: allure-report
-          allure_history: allure-history
-      # публикуем отчет
-      - uses: peaceiris/actions-gh-pages@v2
-        if: always()
-        env:
-          PERSONAL_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          PUBLISH_BRANCH: gh-pages
-          PUBLISH_DIR: allure-history
+          name: selenoid-logs
+          path: |
+            /home/runner/.aerokube/selenoid/logs/*

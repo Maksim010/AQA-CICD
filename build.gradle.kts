@@ -24,8 +24,11 @@ dependencies {
     // JSON
     implementation("com.google.code.gson:gson:2.12.1")
 
+
     // WebDriverManager
     implementation("io.github.bonigarcia:webdrivermanager:5.8.0")
+
+    testImplementation ("org.seleniumhq.selenium:selenium-devtools-v125:4.21.0")
 
     // JUnit 5
     testImplementation("org.junit.jupiter:junit-jupiter-api:5.10.2")
