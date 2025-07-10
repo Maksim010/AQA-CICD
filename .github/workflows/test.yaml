@@ -4,41 +4,89 @@ on: workflow_dispatch
 
 jobs:
   test:
-    # где заускаем
     runs-on: ubuntu-latest
-    # что делаем
-    steps:
-      # выкачиваем репозиторий
-      - uses: actions/checkout@v3
 
-      - run: chmod +x gradlew
-      # настраиваем java
-      - uses: actions/setup-java@v3
+    services:
+      selenoid:
+        image: aerokube/selenoid:latest
+        ports:
+          - 4444:4444
+        volumes:
+          - /var/run/docker.sock:/var/run/docker.sock
+        env:
+          OVERRIDE_HOME: /home/selenoid
+        options: >-
+          --health-cmd "curl -f http://localhost:4444/status || exit 1"
+          --health-interval 5s
+          --health-timeout 10s
+          --health-retries 5
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set gradlew permissions
+        run: |
+          chmod +x gradlew
+          ls -la gradlew # Проверка прав
+
+      - uses: actions/setup-java@v4
         with:
           distribution: 'temurin'
           java-version: '17'
-      - uses: Xotabu4/selenoid-github-action@v2
-      # запускаем тесты
-      - run: ./gradlew clean test -Dselenide.remote=http://localhost:4444/wd/hub
-      # скачиваем историю тестов
-      - uses: actions/checkout@v2
+          cache: 'gradle'
+
+      - name: Verify Selenoid status
+        timeout-minutes: 2
+        run: |
+          echo "Waiting for Selenoid..."
+          for i in {1..30}; do
+            if curl -s http://localhost:4444/status | jq -e '.value.ready == true' >/dev/null; then
+              echo "Selenoid ready!"
+              exit 0
+            fi
+            sleep 2
+          done
+          echo "Selenoid failed to start"
+          docker logs selenoid
+          exit 1
+
+      - name: Run tests
+        timeout-minutes: 15
+        run: |
+          ./gradlew clean test \
+            -Dselenide.remote=http://localhost:4444/wd/hub \
+            -Dselenide.browser=chrome \
+            -Dselenide.browserSize=1920x1080 \
+            --no-daemon \
+            --stacktrace
+
+      - name: Prepare Allure results
         if: always()
-        continue-on-error: true
+        run: |
+          mkdir -p allure-results
+          [ -d build/allure-results ] && cp -r build/allure-results/* allure-results/
+
+      - uses: actions/upload-artifact@v4
+        if: always()
         with:
-          ref: gh-pages
-          path: gh-pages
-      # генерируем отчет
+          name: test-results
+          path: |
+            allure-results/
+            build/reports/tests/test/
+          retention-days: 3
+
       - uses: simple-elf/allure-report-action@master
         if: always()
         with:
           gh_pages: gh-pages
-          allure_results: build/allure-results
+          allure_results: allure-results
           allure_report: allure-report
           allure_history: allure-history
-      # публикуем отчет
-      - uses: peaceiris/actions-gh-pages@v2
+
+      - uses: peaceiris/actions-gh-pages@v4
         if: always()
-        env:
-          PERSONAL_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          PUBLISH_BRANCH: gh-pages
-          PUBLISH_DIR: allure-history
+        with:
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          publish_branch: gh-pages
+          publish_dir: allure-history
+          force_orphan: true
