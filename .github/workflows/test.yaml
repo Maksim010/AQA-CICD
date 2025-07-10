@@ -4,11 +4,11 @@ on: workflow_dispatch
 
 jobs:
   test:
-    runs-on: ubuntu-24.04-latest  # Используем актуальную LTS версию Ubunt
+    runs-on: ubuntu-latest
 
     services:
       selenoid:
-        image: aerokube/selenoid:2.0
+        image: aerokube/selenoid:2.0.4
         ports:
           - 4444:4444
         volumes:
