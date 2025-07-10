@@ -13,28 +13,22 @@ jobs:
           - 4444:4444
         volumes:
           - /var/run/docker.sock:/var/run/docker.sock
-          - ./browsers.json:/etc/selenoid/browsers.json:ro
+          - ${{ github.workspace }}/config/browsers.json:/etc/selenoid/browsers.json:ro
         env:
           OVERRIDE_HOME: /home/selenoid
         options: >-
-          --health-cmd "wget -q --spider http://localhost:4444/status || exit 1"
+          --health-start-period 20s
+          --health-cmd "curl -f http://localhost:4444/status || exit 1"
           --health-interval 10s
           --health-timeout 30s
-          --health-retries 10
+          --health-retries 5
 
     steps:
       - uses: actions/checkout@v4
 
-      - run: chmod +x gradlew
-
-      - uses: actions/setup-java@v4
-        with:
-          distribution: 'temurin'
-          java-version: '17'
-          cache: 'gradle'
-
-      - name: Prepare browsers.json
+      - name: Setup environment
         run: |
+          mkdir -p config
           echo '{
             "chrome": {
               "default": "125.0",
@@ -49,14 +43,14 @@ jobs:
                 }
               }
             }
-          }' > browsers.json
+          }' > config/browsers.json
           
           docker pull selenoid/chrome:125.0
           docker pull selenoid/video-recorder:latest
 
       - name: Wait for Selenoid
+        timeout-minutes: 3
         run: |
-          echo "Waiting for Selenoid to start..."
           for i in {1..30}; do
             if docker inspect selenoid | grep '"Healthy"'; then
               echo "Selenoid is healthy!"
@@ -64,7 +58,7 @@ jobs:
               break
             fi
             sleep 5
-            echo "Attempt $i/30 - Selenoid not ready yet..."
+            echo "Waiting for Selenoid health check (attempt $i/30)..."
           done
 
       - name: Run tests
