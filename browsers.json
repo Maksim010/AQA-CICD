@@ -50,14 +50,5 @@
         "port": "4444"
       }
     }
-  },
-  "safari": {
-    "default": "16.0",
-    "versions": {
-      "16.0": {
-        "image": "selenoid/safari:16.0",
-        "port": "4444"
-      }
-    }
   }
 }
