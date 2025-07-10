@@ -6,22 +6,6 @@ jobs:
   test:
     runs-on: ubuntu-latest
 
-    services:
-      selenoid:
-        image: aerokube/selenoid:latest-release
-        ports:
-          - 4444:4444
-        volumes:
-          - /var/run/docker.sock:/var/run/docker.sock
-          - ./browsers.json:/etc/selenoid/config/browsers.json:ro
-        env:
-          OVERRIDE_HOME: /home/selenoid
-        options: >-
-          --health-cmd "wget -q --spider http://localhost:4444/status || exit 1"
-          --health-interval 10s
-          --health-timeout 30s
-          --health-retries 10
-
     steps:
       - uses: actions/checkout@v4
 
@@ -31,80 +15,68 @@ jobs:
         with:
           distribution: 'temurin'
           java-version: '17'
-          cache: 'gradle'
 
-      - name: Prepare browsers.json
+      # Явно скачиваем образ браузера
+      - name: Pull browser image
+        run: docker pull selenoid/chrome:latest
+
+      # Запускаем Selenoid с явной конфигурацией
+      - name: Start Selenoid
         run: |
+          mkdir -p ~/.aerokube/selenoid
           echo '{
             "chrome": {
-              "default": "125.0",
+              "default": "latest",
               "versions": {
-                "125.0": {
-                  "image": "selenoid/chrome:125.0",
+                "latest": {
+                  "image": "selenoid/chrome:latest",
                   "port": "4444",
-                  "path": "/",
-                  "env": ["TZ=UTC"],
-                  "volumes": ["/tmp:/tmp"],
-                  "tmpfs": {"/tmp": "size=512m"}
+                  "path": "/"
                 }
               }
             }
-          }' > config/browsers.json
+          }' > ~/.aerokube/selenoid/browsers.json
           
-          docker pull selenoid/chrome:125.0
-          docker pull selenoid/video-recorder:latest
+          docker run -d --name selenoid \
+            -p 4444:4444 \
+            -v /var/run/docker.sock:/var/run/docker.sock \
+            -v ~/.aerokube/selenoid:/etc/selenoid \
+            aerokube/selenoid:latest
 
+      # Ждём готовности Selenoid
       - name: Wait for Selenoid
         run: |
-          echo "Waiting for Selenoid to start..."
-          for i in {1..30}; do
-            if docker inspect selenoid | grep '"Healthy"'; then
-              echo "Selenoid is healthy!"
-              curl -v http://localhost:4444/status
+          for i in {1..10}; do
+            if curl -s http://localhost:4444/status | grep -q '"total":'; then
+              echo "Selenoid ready!"
               break
             fi
-            sleep 5
-            echo "Attempt $i/30 - Selenoid not ready yet..."
+            echo "Waiting for Selenoid (attempt $i)..."
+            sleep 3
           done
 
-      - name: Run tests
-        run: |
-          ./gradlew clean test \
-            -Dselenide.remote=http://localhost:4444/wd/hub \
-            -Dselenide.browser=chrome \
-            -Dselenide.browserVersion=125.0 \
-            -Dremote.timeout=120000
+      # Запускаем тесты с debug-логами
+      - run: ./gradlew clean test -Dselenide.remote=http://localhost:4444/wd/hub -Dselenide.browser=chrome -Dremote.timeout=60000
 
-      - name: Upload test results
-        uses: actions/upload-artifact@v4
-        if: always()
+      # Сохраняем логи при ошибке
+      - uses: actions/upload-artifact@v4
+        if: failure()
         with:
-          name: test-results
+          name: selenoid-logs
           path: |
-            build/reports/tests/test
-            build/allure-results
-            browsers.json
+            /home/runner/.aerokube/selenoid/logs/*
 
-      - uses: actions/checkout@v4
-        if: always()
-        continue-on-error: true
-        with:
-          ref: gh-pages
-          path: gh-pages
-
-      - name: Setup Allure reporting
-        uses: simple-elf/allure-report-action@master
+      - uses: simple-elf/allure-report-action@master
         if: always()
         with:
           gh_pages: gh-pages
           allure_results: build/allure-results
           allure_report: allure-report
-
-      - name: Deploy report
-        uses: peaceiris/actions-gh-pages@v4
+          allure_history: allure-history
+            # публикуем отчет
+      - uses: peaceiris/actions-gh-pages@v2
         if: always()
-        with:
-          github_token: ${{ secrets.GITHUB_TOKEN }}
-          publish_branch: gh-pages
-          publish_dir: ./allure-report
-          force_orphan: true
+        env:
+          PERSONAL_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          PUBLISH_BRANCH: gh-pages
+          PUBLISH_DIR: allure-history
