@@ -8,17 +8,19 @@ jobs:
 
     services:
       selenoid:
-        image: aerokube/selenoid
+        image: aerokube/selenoid:2.0.1
         ports:
           - 4444:4444
         volumes:
           - /var/run/docker.sock:/var/run/docker.sock
           - ./browsers.json:/etc/selenoid/browsers.json:ro
+        env:
+          OVERRIDE_HOME: /home/selenoid
         options: >-
-          --health-cmd "curl -f http://localhost:4444/status || exit 1"
-          --health-interval 5s
-          --health-timeout 10s
-          --health-retries 5
+          --health-cmd "wget -q --spider http://localhost:4444/status || exit 1"
+          --health-interval 10s
+          --health-timeout 30s
+          --health-retries 10
 
     steps:
       - uses: actions/checkout@v4
@@ -31,7 +33,7 @@ jobs:
           java-version: '17'
           cache: 'gradle'
 
-      - name: Prepare Selenoid config
+      - name: Prepare browsers.json
         run: |
           echo '{
             "chrome": {
@@ -50,27 +52,28 @@ jobs:
           }' > browsers.json
           
           docker pull selenoid/chrome:125.0
+          docker pull selenoid/video-recorder:latest
 
       - name: Wait for Selenoid
         run: |
-          for i in {1..15}; do
-            if curl -s http://localhost:4444/status | grep -q '"total":'; then
-              echo "Selenoid ready!"
-              curl http://localhost:4444/status
+          echo "Waiting for Selenoid to start..."
+          for i in {1..30}; do
+            if docker inspect selenoid | grep '"Healthy"'; then
+              echo "Selenoid is healthy!"
+              curl -v http://localhost:4444/status
               break
             fi
-            echo "Waiting for Selenoid (attempt $i)..."
-            sleep 3
+            sleep 5
+            echo "Attempt $i/30 - Selenoid not ready yet..."
           done
 
-      - name: Run tests with Selenoid
+      - name: Run tests
         run: |
           ./gradlew clean test \
             -Dselenide.remote=http://localhost:4444/wd/hub \
             -Dselenide.browser=chrome \
             -Dselenide.browserVersion=125.0 \
-            -Dremote.timeout=90000 \
-            -Dwebdriver.chrome.whitelistedIps=""
+            -Dremote.timeout=120000
 
       - name: Upload test results
         uses: actions/upload-artifact@v4
