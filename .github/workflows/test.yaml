@@ -21,21 +21,19 @@ jobs:
         run: docker pull selenoid/chrome:latest
 
       # Запускаем Selenoid с явной конфигурацией
-      - name: Start Selenoid
+      - name: Setup Selenoid
         run: |
-          mkdir -p ~/.aerokube/selenoid
+          docker pull selenoid/chrome:125.0
           echo '{
             "chrome": {
-              "default": "latest",
+              "default": "125.0",
               "versions": {
-                "latest": {
-                  "image": "selenoid/chrome:latest",
-                  "port": "4444",
-                  "path": "/"
+                "125.0": {
+                  "image": "selenoid/chrome:125.0"
                 }
               }
             }
-          }' > ~/.aerokube/selenoid/browsers.json
+          }' > browsers.json
           
           docker run -d --name selenoid \
             -p 4444:4444 \
