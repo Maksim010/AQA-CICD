@@ -4,11 +4,11 @@ on: workflow_dispatch
 
 jobs:
   test:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04-latest  # Используем актуальную LTS версию Ubuntu
 
     services:
       selenoid:
-        image: aerokube/selenoid
+        image: aerokube/selenoid:2.0.1  # Фиксируем версию
         ports:
           - 4444:4444
         volumes:
@@ -26,16 +26,16 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v4
 
-      - name: Setup Java 17
+      - name: Setup Java
         uses: actions/setup-java@v4
         with:
           distribution: 'temurin'
           java-version: '17'
           cache: 'gradle'
 
-      - name: Setup Selenoid environment
+      - name: Prepare Selenoid environment
         run: |
-          mkdir -p ~/.aerokube/selenoid
+          # Создаем минимальную конфигурацию
           echo '{
             "chrome": {
               "default": "125.0",
@@ -45,57 +45,65 @@ jobs:
                   "port": "4444",
                   "path": "/",
                   "env": ["TZ=UTC"],
-                  "volumes": ["/tmp:/tmp"]
+                  "volumes": ["/tmp:/tmp"],
+                  "tmpfs": {"/tmp": "size=512m"}
                 }
               }
             }
           }' > browsers.json
           
+          # Предварительно загружаем образы
           docker pull selenoid/chrome:125.0
+          docker pull selenoid/video-recorder:latest  # Для записи видео тестов
 
       - name: Wait for Selenoid
+        timeout-minutes: 5  # Добавляем таймаут
         run: |
-          for i in {1..10}; do
+          for i in {1..15}; do  # Увеличили количество попыток
             if curl -s http://localhost:4444/status | grep -q '"total":'; then
               echo "Selenoid ready!"
-              curl http://localhost:4444/status
+              echo "Status: $(curl -s http://localhost:4444/status)"
               break
             fi
             echo "Waiting for Selenoid (attempt $i)..."
-            sleep 3
+            sleep 5  # Увеличили интервал
           done
 
       - name: Run tests
+        timeout-minutes: 30  # Таймаут для длительных тестов
         run: |
           ./gradlew clean test \
             -Dselenide.remote=http://localhost:4444/wd/hub \
             -Dselenide.browser=chrome \
             -Dselenide.browserVersion=125.0 \
-            -Dremote.timeout=90000
+            -Dremote.timeout=90000 \
+            -Dwebdriver.chrome.whitelistedIps=""
 
       - name: Upload test results
         uses: actions/upload-artifact@v4
         if: always()
         with:
-          name: test-results
+          name: test-artifacts
           path: |
-            build/reports/tests/test
-            build/allure-results
+            build/reports/
+            build/allure-results/
+            browsers.json
+            selenoid.log
+          retention-days: 3  # Автоочистка старых артефактов
 
-      - name: Setup Allure reporting
-        uses: simple-elf/allure-report-action@master  # Используем конкретную стабильную версию
-        if: always()
-        with:
-          gh_pages: gh-pages
-          allure_results: build/allure-results
-          allure_report: allure-report
-          allure_history: allure_history
+      -  uses: simple-elf/allure-report-action@master
+         if: always()
+         with:
+            gh_pages: gh-pages
+            allure_results: build/allure-results
+            allure_report: allure-report
+            allure_history: allure-history
 
       - name: Deploy report
         uses: peaceiris/actions-gh-pages@v3
-        if: always()
+        if: success() || failure()  # Публикуем при любом результате
         with:
           github_token: ${{ secrets.GITHUB_TOKEN }}
           publish_branch: gh-pages
           publish_dir: ./allure-report
-          force_orphan: true
+          keep_files: false  # Чистим перед публикацией
