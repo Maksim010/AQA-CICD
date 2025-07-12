@@ -18,7 +18,6 @@ import static HomeWorkDemoQA.TestData.HOBBIES;
 import static HomeWorkDemoQA.TestData.LAST_NAME;
 import static HomeWorkDemoQA.TestData.MODAL_TEXT;
 import static HomeWorkDemoQA.TestData.MONTH;
-import static HomeWorkDemoQA.TestData.PICTURE;
 import static HomeWorkDemoQA.TestData.RANDOM_FIRST_NAME;
 import static HomeWorkDemoQA.TestData.STATE;
 import static HomeWorkDemoQA.TestData.SUBJECT;

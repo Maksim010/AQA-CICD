@@ -7,6 +7,9 @@ import io.qameta.allure.Step;
 import io.qameta.allure.selenide.AllureSelenide;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.BeforeEach;
+import org.openqa.selenium.chrome.ChromeOptions;
+
+import java.util.Map;
 
 import static HomeWorkDemoQA.TestData.BASE_URL;
 import static HomeWorkDemoQA.TestData.BROWSER;
@@ -35,6 +38,13 @@ public class BaseTestsDemoQA {
         Configuration.holdBrowserOpen = true;
         Configuration.timeout = TIMEOUT;
         SelenideLogger.addListener("AllureListener" , new AllureSelenide());
+        ChromeOptions options = new ChromeOptions();
+        options.setBrowserVersion("125.0");
+        options.setCapability("selenoid:options", Map.of(
+                "enableVNC", true,
+                "enableVideo", false
+        ));
+        Configuration.browserCapabilities = options;
     }
 
     @Step("Precondition для тестов на форму DemoQA ")
