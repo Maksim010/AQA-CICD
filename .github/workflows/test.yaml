@@ -11,11 +11,9 @@ jobs:
         image: aerokube/selenoid:1.10.7
         ports:
           - 4444:4444
-
         volumes:
           - /var/run/docker.sock:/var/run/docker.sock
-          - ${{ github.workspace }}/config/browsers.json:/etc/selenoid/browsers.json:ro
-
+          - /tmp/browsers.json:/etc/selenoid/browsers.json:ro  # Используем временную директорию
         options: >-
           --health-cmd "curl -f http://localhost:4444/status || exit 1"
           --health-interval 10s
@@ -33,15 +31,9 @@ jobs:
           java-version: '17'
           cache: 'gradle'
 
-      - name: Create browsers.json
+      - name: Prepare Selenoid environment
         run: |
-          # Создаем директорию config если ее нет
-          mkdir -p config
-
-          # Удаляем старый файл/директорию если существует
-          rm -rf config/browsers.json
-
-          # Создаем новый файл
+          # Создаем browsers.json во временной директории
           echo '{
             "chrome": {
               "default": "125.0",
@@ -56,9 +48,21 @@ jobs:
                 }
               }
             }
-          }' > config/browsers.json
+          }' > /tmp/browsers.json
           
+          # Проверяем что файл создан
+          ls -la /tmp/browsers.json
+          cat /tmp/browsers.json
+          
+          # Загружаем необходимые образы
           docker pull selenoid/chrome:125.0
+          docker pull aerokube/selenoid:1.10.7
+
+      - name: Verify Selenoid config
+        run: |
+          echo "Checking mounted config in container:"
+          docker exec selenoid ls -la /etc/selenoid/
+          docker exec selenoid cat /etc/selenoid/browsers.json || (echo "::error::Failed to read config"; exit 1)
 
       - name: Wait for Selenoid
         run: |
@@ -70,13 +74,6 @@ jobs:
             fi
             sleep 3
           done
-
-      - name: Debug Selenoid
-        if: failure()
-        run: |
-          docker ps -a
-          docker logs selenoid
-          curl -v http://localhost:4444/status
 
       - name: Run tests
         run: |
