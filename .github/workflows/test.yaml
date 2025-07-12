@@ -6,83 +6,28 @@ jobs:
   test:
     runs-on: ubuntu-latest
 
-    services:
-      selenoid:
-        image: aerokube/selenoid:1.10.7
-        ports:
-          - 4444:4444
-        volumes:
-          - /var/run/docker.sock:/var/run/docker.sock
-          - /tmp/browsers.json:/etc/selenoid/browsers.json:ro  # Используем временную директорию
-        options: >-
-          --health-cmd "curl -f http://localhost:4444/status || exit 1"
-          --health-interval 10s
-          --health-timeout 30s
-          --health-retries 5
-
     steps:
+      #выкачиваем репо
       - uses: actions/checkout@v4
 
       - run: chmod +x gradlew
-
+      # настраиваем java
       - uses: actions/setup-java@v4
         with:
           distribution: 'temurin'
           java-version: '17'
-          cache: 'gradle'
 
-      - name: Prepare Selenoid environment
-        run: |
-          # Создаем browsers.json во временной директории
-          echo '{
-            "chrome": {
-              "default": "125.0",
-              "versions": {
-                "125.0": {
-                  "image": "selenoid/chrome:125.0",
-                  "port": "4444",
-                  "path": "/",
-                  "env": ["TZ=UTC"],
-                  "volumes": ["/tmp:/tmp"],
-                  "tmpfs": {"/tmp": "size=512m"}
-                }
-              }
-            }
-          }' > /tmp/browsers.json
-          
-          # Проверяем что файл создан
-          ls -la /tmp/browsers.json
-          cat /tmp/browsers.json
-          
-          # Загружаем необходимые образы
-          docker pull selenoid/chrome:125.0
-          docker pull aerokube/selenoid:1.10.7
-
-      - name: Verify Selenoid config
-        run: |
-          echo "Checking mounted config in container:"
-          docker exec selenoid ls -la /etc/selenoid/
-          docker exec selenoid cat /etc/selenoid/browsers.json || (echo "::error::Failed to read config"; exit 1)
-
-      - name: Wait for Selenoid
-        run: |
-          for i in {1..15}; do
-            if curl -s http://localhost:4444/status | grep -q '"total":'; then
-              echo "Selenoid ready!"
-              curl http://localhost:4444/status
-              break
-            fi
-            sleep 3
-          done
-
-      - name: Run tests
-        run: |
-          ./gradlew clean test \
-            -Dselenide.remote=http://localhost:4444/wd/hub \
-            -Dselenide.browser=chrome \
-            -Dselenide.browserVersion=125.0 \
-            -Dremote.timeout=90000
-
+      - uses: Xotabu4/selenoid-github-action@v2
+      # запускаем тесты
+      - run: ./gradlew clean test -Dselenide.remote=http://localhost:4444/wd/hub
+      # скачиваем историю тестов
+      - uses: actions/checkout@v4
+        if: always()
+        continue-on-error: true
+        with:
+          ref: gh-pages
+          path: gh-pages
+      # генерируем отчет
       - uses: simple-elf/allure-report-action@master
         if: always()
         with:
@@ -90,7 +35,7 @@ jobs:
           allure_results: build/allure-results
           allure_report: allure-report
           allure_history: allure-history
-            # публикуем отчет
+      # публикуем отчет
       - uses: peaceiris/actions-gh-pages@v2
         if: always()
         env:

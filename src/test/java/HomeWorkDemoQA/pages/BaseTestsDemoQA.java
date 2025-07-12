@@ -38,13 +38,6 @@ public class BaseTestsDemoQA {
         Configuration.holdBrowserOpen = true;
         Configuration.timeout = TIMEOUT;
         SelenideLogger.addListener("AllureListener" , new AllureSelenide());
-        ChromeOptions options = new ChromeOptions();
-        options.setBrowserVersion("125.0");
-        options.setCapability("selenoid:options", Map.of(
-                "enableVNC", true,
-                "enableVideo", false
-        ));
-        Configuration.browserCapabilities = options;
     }
 
     @Step("Precondition для тестов на форму DemoQA ")
